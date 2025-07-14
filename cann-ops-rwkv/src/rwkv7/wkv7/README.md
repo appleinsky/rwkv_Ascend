@@ -23,17 +23,17 @@
     <tr><td rowspan="1" align="center">算子类型(OpType)</td><td colspan="4" align="center">WKV7</td></tr>
     </tr>
     <tr><td rowspan="8" align="center">算子输入</td><td align="center">name</td><td align="center">shape</td><td align="center">data type</td><td align="center">format</td></tr>
-    <tr><td align="center">query</td><td align="center">B,T,H,N</td><td align="center">float16、float</td><td align="center">ND</td></tr>
-    <tr><td align="center">key</td><td align="center">B,T,H,N</td><td align="center">float16、float</td><td align="center">ND</td></tr>
-    <tr><td align="center">value</td><td align="center">B,T,H,N</td><td align="center">float16、float</td><td align="center">ND</td></tr>
-    <tr><td align="center">weight</td><td align="center">B,T,H,N</td><td align="center">float16、float</td><td align="center">ND</td></tr>
-    <tr><td align="center">a(-kk)</td><td align="center">B,T,H,N</td><td align="center">float16、float</td><td align="center">ND</td></tr>
-    <tr><td align="center">b(kk * a)</td><td align="center">B,T,H,N</td><td align="center">float16、float</td><td align="center">ND</td></tr>
-    <tr><td align="center">h0</td><td align="center">B,T,N,N</td><td align="center">float16、float</td><td align="center">ND</td></tr>
+    <tr><td align="center">query</td><td align="center">B,H,T,N</td><td align="center">float</td><td align="center">ND</td></tr>
+    <tr><td align="center">key</td><td align="center">B,H,T,N</td><td align="center">float</td><td align="center">ND</td></tr>
+    <tr><td align="center">value</td><td align="center">B,H,T,N</td><td align="center">float</td><td align="center">ND</td></tr>
+    <tr><td align="center">weight</td><td align="center">B,H,T,N</td><td align="center">float</td><td align="center">ND</td></tr>
+    <tr><td align="center">a(-kk)</td><td align="center">B,H,T,N</td><td align="center">float</td><td align="center">ND</td></tr>
+    <tr><td align="center">b(kk * a)</td><td align="center">B,H,T,N</td><td align="center">float</td><td align="center">ND</td></tr>
+    <tr><td align="center">h0</td><td align="center">B,T,N,N</td><td align="center">float</td><td align="center">ND</td></tr>
     </tr>
     </tr>
-    <tr><td rowspan="2" align="center">算子输出</td><td align="center">output</td><td align="center">B,T,H,N</td><td align="center">float16、float</td><td align="center">ND</td></tr>
-    <td align="center">ht</td><td align="center">B,T,N,N</td><td align="center">float16、float</td><td align="center">ND</td></tr>
+    <tr><td rowspan="2" align="center">算子输出</td><td align="center">output</td><td align="center">B,H,T,N</td><td align="center">float</td><td align="center">ND</td></tr>
+    <td align="center">ht</td><td align="center">B,T,N,N</td><td align="center">float</td><td align="center">ND</td></tr>
     </tr>
   </table>
 
@@ -68,22 +68,22 @@ extern "C" __global__ __aicore__ void wkv7(GM_ADDR k, GM_ADDR v, GM_ADDR w, GM_A
 ```
 
 详细入参说明:
-- `k`: 输入矩阵 k (shape: [B, H, T, N], datatype: half、float)
-- `v`: 输入矩阵 v (shape: [B, H, T, N], datatype: half、float)
-- `w`: 输入矩阵 w (shape: [B, H, T, N], datatype: half、float)
-- `q`: 输入矩阵 r (shape: [B, H, T, N], datatype: half、float)
-- `a`: 输入矩阵 a (shape: [B, H, T, N], datatype: half、float)
-- `b`: 输入矩阵 b (shape: [B, H, T, N], datatype: half、float)
-- `h0`: 输入矩阵 h (shape: [B, H, N, N], datatype: half、float)
-- `o`: 输出矩阵 o (shape: [B, H, T, N], datatype: half、float)
-- `ht`: 输出矩阵 o (shape: [B, H, N, N], datatype: half、float)
+- `k`: 输入矩阵 k (shape: [B, H, T, N], datatype: float)
+- `v`: 输入矩阵 v (shape: [B, H, T, N], datatype: float)
+- `w`: 输入矩阵 w (shape: [B, H, T, N], datatype: float)
+- `q`: 输入矩阵 r (shape: [B, H, T, N], datatype: float)
+- `a`: 输入矩阵 a (shape: [B, H, T, N], datatype: float)
+- `b`: 输入矩阵 b (shape: [B, H, T, N], datatype: float)
+- `h0`: 输入矩阵 h (shape: [B, H, N, N], datatype: float)
+- `o`: 输出矩阵 o (shape: [B, H, T, N], datatype: float)
+- `ht`: 输出矩阵 o (shape: [B, H, N, N], datatype: float)
 
 ## 算子实现方案
 
 ### 分核, Tiling, 数据搬运
 
-输入矩阵为 k, v, w, r, a, b, h0 其中 k, v, w, r, a, b 矩阵的 shape 为 [B, H, T, N], h0 矩阵的 shape 为 [B, T, N, N]; 输出矩阵为 o, ht。
-因此选择在 B 和 H 维度进行分核, 对 k, v, w, r, o 在 T 维度进行 tiling 切分后分 tile 搬运。
+输入矩阵为 k, v, w, r, a, b, h0 其中 k, v, w, r, a, b 矩阵的 shape 为 [B, H, T, N], h0 矩阵的 shape 为 [B, H, N, N]; 输出矩阵为 o, ht。
+因此选择在 B 和 H 维度进行分核, 对 k, v, w, r, o 在 T 维度进行单核 tiling 切分后循环tileNum次，每次搬运计算 tileLength*N 。
 
 #### 分核
 
@@ -91,7 +91,7 @@ extern "C" __global__ __aicore__ void wkv7(GM_ADDR k, GM_ADDR v, GM_ADDR w, GM_A
 
 #### Tiling
 
-对数据排布为 [B, H, T, N] 顺序的 k, v, w, r, a, b, h0 矩阵, 在 T 维度切分后, 每次搬运的数据块大小为 tileLength * N 个元素。 具体 tileLength 可以根据 N 的大小、UB 内存 192KB、DataCopy 指令单次搬运量越大连续 datablock 越长性能越好, 等综合考虑。
+对数据排布为 [B, H, T, N] 顺序的 k, v, w, r, a, b, h0 矩阵, 在 T 维度切分后, 每次搬运的数据块大小为 tileLength * N 个元素。 具体 tileLength 可以根据 N 的大小、UB 内存（192KB、256KB）、DataCopy 指令单次搬运量越大连续 datablock 越长性能越好, 等综合考虑。
 
 #### 其他 Tiling 方案
 
