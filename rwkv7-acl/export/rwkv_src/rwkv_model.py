@@ -126,17 +126,15 @@ class RWKV_RNN(torch.nn.Module):
         if self.gpu:
             self.to(self.device)
 
-    def forward(self, in0, state: List[torch.Tensor]):
+    def forward(self, in0, state: List[torch.Tensor]):   
+        in0 = torch.tensor([in0],dtype=torch.int64,device="npu").view(-1)
+        seq_length = in0.size(0)
+        batch_size = 1
         with torch.no_grad():
             if self.args.USE_EMBEDDING and self.chunk_idx == 0:
-                x = self.embedding(in0)
+                x = self.embedding(in0).view(batch_size,seq_length,-1)
             else:
                 x = in0
-            try:
-                batch_size, seq_length, _ = x.size()
-            except:
-                batch_size, seq_length = 1, 1
-            
             if self.args.version == 7:
                 v_first = torch.empty_like(x)
 
@@ -154,10 +152,7 @@ class RWKV_RNN(torch.nn.Module):
                 x = self.head(x)
             else:
                 x = x.view(batch_size, seq_length, self.args.n_embd)
-            for arr in x:
-                arr = arr.half()
-            for arr in state:
-                arr = arr.half()
+
             return x, state
 
 def make_chunks(chunks, args):

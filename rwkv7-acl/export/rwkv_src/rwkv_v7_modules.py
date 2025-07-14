@@ -93,13 +93,15 @@ class Rwkv7SelfAttention(nn.Module):
     def forward(self, x, state1, state2, v_first):
         last_x = x
         x = self.ln_1(x)
-        batch_size, seq_length, _ = x.size()
+        batch_size = 1
+        batch_size,seq_length, _ = x.size()
         assert batch_size == 1
         if seq_length == 1:
             state1_out = x
             sx = self.sub_shifted(state1, x)
         else:
-            past = torch.cat([state1.unsqueeze(1), x[:, :-1, :]], dim=1)
+            state1 = state1.view(batch_size,1,-1)
+            past = torch.cat([state1, x[:, :-1, :]], dim=1)
             sx = self.sub_shifted(past, x)
             state1_out = x[:, -1, :]
 
@@ -129,14 +131,25 @@ class Rwkv7SelfAttention(nn.Module):
 
         time_decay = self.add_time_decay0(self.time_decay, time_decay)
         time_decay = self.exp_w(-0.606531 * self.sigmoid_w(time_decay)).view(seq_length, self.num_heads, 1, self.head_size)
-
-        # kernel
         vk = value.view(seq_length, self.num_heads, self.head_size, 1) @ key.view(seq_length, self.num_heads, 1, self.head_size)
-        
-        ab = (-kk).view(self.num_heads, self.head_size, 1) @ (kk * a).view(self.num_heads, 1, self.head_size)
-        state2_out = state2 * time_decay + (state2 @ ab) + vk
-        x = (state2_out @ receptance.view(seq_length, self.num_heads, self.head_size, 1)).view(seq_length, self.num_heads, 1, self.head_size)
-
+        # kernel
+        if seq_length == 1: 
+            ab = (-kk).view(self.num_heads, self.head_size, 1) @ (kk * a).view(self.num_heads, 1, self.head_size)
+            state2_out = state2 * time_decay + (state2 @ ab) + vk
+            x = (state2_out @ receptance.view(seq_length, self.num_heads, self.head_size, 1)).view(seq_length, self.num_heads, 1, self.head_size)
+        else:
+            kk = kk.view(1,seq_length,-1)
+            b = (kk * a).view(seq_length, self.num_heads, 1, self.head_size)
+            a = -kk.view(seq_length, self.num_heads, self.head_size, 1)
+            x = torch.zeros(seq_length, self.num_heads, self.head_size, 1, device=key.device,dtype=vk.dtype)
+            time_decay = time_decay.view(seq_length, self.num_heads, 1, self.head_size)
+            r = receptance.view(seq_length, self.num_heads, self.head_size, 1)
+            for i in range(seq_length):
+                state2 = state2 * time_decay[i, : , :, :] + (state2 @ a[i, :, :, :] @ b[i, :, :, :]) + vk[i, :, :, :]
+                x[i, :, :, :] = state2 @ r[i, :, :, :]
+            x = x.view(seq_length, self.num_heads, 1, self.head_size)
+            state2_out = state2
+            
         # group_norm
         x = self.ln_x(x).view(batch_size, seq_length, self.hidden_size)
         x = self.mul_ln_x(x, self.ln_x_w)
@@ -182,7 +195,8 @@ class Rwkv7FeedForward(nn.Module):
             state_out = x
             sx = self.sub_shifted(state, x)
         else:
-            past = torch.cat([state.unsqueeze(1), x[:, :-1, :]], dim=1)
+            state = state.view(batch_size,1,-1)
+            past = torch.cat([state, x[:, :-1, :]], dim=1)
             sx = self.sub_shifted(past, x)
             state_out = x[:, -1, :]
 
